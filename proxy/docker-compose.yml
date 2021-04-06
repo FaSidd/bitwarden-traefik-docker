@@ -40,7 +40,7 @@ services:
       - traefik
     environment:
       - WEBSOCKET_ENABLED=true  # Enable WebSocket notifications.
-      - SIGNUPS_ALLOWED=false # Disbale new signups
+        #- SIGNUPS_ALLOWED=false # Disbale new signups
     volumes:
       - ./bw-data:/data
     networks:
