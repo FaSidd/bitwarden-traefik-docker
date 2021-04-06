@@ -1,0 +1,64 @@
+version: "3.3"
+
+services:
+  traefik:
+    image: traefik:latest
+    restart: always
+    container_name: traefik
+    ports:
+      - "80:80" # <== http
+      - "8080:8080" # <== :8080 is where the dashboard runs on
+      - "443:443" # <== https
+    command:
+      - --api.insecure=true # <== Enabling insecure api, NOT RECOMMENDED FOR PRODUCTION
+      - --api.dashboard=true # <== Enabling the dashboard to view services, middlewares, routers, etc.
+      - --api.debug=true # <== Enabling additional endpoints for debugging and profiling
+      - --log.level=DEBUG # <== Setting the level of the logs from traefik
+      - --providers.docker=true # <== Enabling docker as the provider for traefik
+      - --providers.docker.exposedbydefault=false # <== Don't expose every container to traefik
+      - --providers.file.filename=/dynamic.yaml # <== Referring to a dynamic configuration file
+      - --providers.docker.network=web # <== Operate on the docker network named web
+      - --entrypoints.web.address=:80 # <== Defining an entrypoint for port :80 named web
+      - --entrypoints.web-secured.address=:443 # <== Defining an entrypoint for https on port :443
+    volumes:
+      - ./certs:/certs
+      - /var/run/docker.sock:/var/run/docker.sock # <== Volume for docker admin
+      - ./dynamic.yaml:/dynamic.yaml # <== Volume for dynamic conf file, **ref: line 27
+    networks:
+      - web # <== Placing traefik on the network named web, to access containers on this network
+    labels:
+      - "traefik.enable=true" # <== Enable traefik on itself to view dashboard and assign subdomain to$
+      - "traefik.http.routers.api.rule=Host(`monitor.domain.tld`)" # <== Setting the domain for the d$
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.service=api@internal" # <== Enabling the api to be a service to acce$
+
+  bitwarden:
+    image: bitwardenrs/server:latest
+    container_name: bitwarden
+    restart: always
+    depends_on:
+      - traefik
+    environment:
+      - WEBSOCKET_ENABLED=true  # Enable WebSocket notifications.
+      - SIGNUPS_ALLOWED=false # Disbale new signups
+    volumes:
+      - ./bw-data:/data
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bitwarden-https.rule=Host(`bw.domain.tld`)"
+      - "traefik.http.routers.bitwarden-https.entrypoints=web-secured"
+      - "traefik.http.routers.bitwarden-https.tls=true"
+      - "traefik.http.routers.bitwarden-https.service=bitwarden-https"
+      - "traefik.http.services.bitwarden-https.loadbalancer.server.port=80"
+      - "traefik.http.routers.bitwarden-websocket.rule=Host(`bw.domain.tld`) && Path(`/notifications/hub`)"
+      - "traefik.http.routers.bitwarden-websocket.entrypoints=web-secured"
+      - "traefik.http.routers.bitwarden-websocket.tls=true"
+      - "traefik.http.middlewares.bitwarden-websocket=bw-stripPrefix@file"
+      - "traefik.http.routers.bitwarden-websocket.service=bitwarden-websocket"
+      - "traefik.http.services.bitwarden-websocket.loadbalancer.server.port=3012"
+
+networks:
+  web:
+    external: true

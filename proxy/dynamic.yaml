@@ -1,0 +1,17 @@
+## Setting up the middleware for redirect to https ##
+http:
+  middlewares:
+    redirect:
+      redirectScheme:
+        scheme: https
+## Adding bitwarden websocket notification hub for traefik to understand
+    bw-stripPrefix:
+      stripPrefix:
+        prefixes:
+          - "/notifications/hub"
+        forceSlash: false
+## Defining default certs for traefik to use
+tls:
+  certificates:
+    - certFile: "/certs/exampleCert.pem"
+      keyFile: "/certs/exampleKey.key"
